@@ -44,13 +44,6 @@ fn main() {
 
     println!("Server Name: {}", server_name);
 
-    // Check type of OS
-    match std::env::consts::OS {
-        "linux" => linux(),
-        "windows" => windows(),
-        _ => println!("Running on an unknown operating system"),
-    }
-
     let update = Updates {
         firstrun: 1,
         sqlupdate: 1,
@@ -79,17 +72,19 @@ fn main() {
         }
         fs::write(file_path, json_data.as_bytes()).expect("Unable to write file");
     }
+
     println!("Downloading SQL Full Update");
-    download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar");
+    //download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar");
+    download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar", "./");
 
     extract("eq2emudb.rar");
 
-    // Ask the user for input before exiting
-    println!("Press Enter to exit...");
-    let mut buffer = String::new();
-    io::stdin()
-        .read_line(&mut buffer)
-        .expect("Failed to read line");
+    // Check type of OS
+    match std::env::consts::OS {
+        "linux" => linux(),
+        "windows" => windows(),
+        _ => println!("Running on an unknown operating system"),
+    }
 }
 
 fn is_reachable(domain_name: &str) -> bool {
@@ -150,10 +145,22 @@ fn windows() {
 
         println!("Downloading Microsoft Visual C++ Redistributable");
 
-        download(&redist_url, &full_filename);
+        //download(&redist_url, &full_filename);
+        download(&redist_url, &full_filename, "./redist/");
+
         install_redist(&PathBuf::from(&full_filename));
+
+        // Ask the user for input before exiting
+        println!("Press Enter to exit...");
+        let mut buffer = String::new();
+        io::stdin()
+            .read_line(&mut buffer)
+            .expect("Failed to read line");
     } else {
-        println!("{} is not reachable", ZEKLABS);
+        println!(
+            "{} is not reachable. Cannot continue without internet access.",
+            ZEKLABS
+        );
     }
 }
 fn install_redist(exe_path: &PathBuf) {
@@ -189,7 +196,30 @@ fn extract(filename: &str) {
     }
 }
 
-fn download(url: &str, filename: &str) {
+fn download(url: &str, filename: &str, download_location: &str) {
+    // Create the download location directory if it doesn't exist
+    if !Path::new(download_location).exists() {
+        match fs::create_dir_all(download_location) {
+            Ok(()) => println!("Directory created successfully."),
+            Err(e) => {
+                eprintln!("Error creating directory: {}", e);
+                return;
+            }
+        }
+    }
+
+    // Construct the full path for the downloaded file
+    let full_filename = PathBuf::from(download_location).join(filename);
+
+    let download = Download::new(url, Some(&full_filename.to_str().unwrap()), None);
+
+    match download.download() {
+        Ok(_) => println!("Download Complete"),
+        Err(e) => println!("Download error: {}", e.to_string()),
+    }
+}
+
+/* fn download(url: &str, filename: &str) {
     /* let url = &redist_url;
     let filename = &full_filename; */
     let download = Download::new(url, Some(filename), None);
@@ -198,4 +228,4 @@ fn download(url: &str, filename: &str) {
         Ok(_) => println!("Download Complete"),
         Err(e) => println!("Download error: {}", e.to_string()),
     }
-}
+} */
