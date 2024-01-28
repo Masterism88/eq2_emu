@@ -1,5 +1,5 @@
 use download_rs::async_download::Download;
-use owo_colors::OwoColorize;
+//use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
@@ -55,36 +55,62 @@ fn main() {
         updatels: 1,
         dbeditor: 1,
     };
-    // Serialize the data to a JSON string
-    let json_data = serde_json::to_string(&update).expect("Failed to serialize to JSON");
 
-    // Check if config file exists, if not create it
-    let file_path = path::Path::new("config.json");
-    println!("Config File");
-    if file_path.exists() {
-        println!("Config file exists");
-        fs::write(file_path, json_data.as_bytes()).expect("Unable to write file");
-    } else {
-        // Create the file using `fs::File::create()`
-        match fs::File::create(&file_path) {
-            Ok(_) => println!("Config file created successfully"),
-            Err(e) => println!("Error creating file: {}", e),
+    // Check for internet access
+    const ZEKLABS: &str = r#"Zeklabs.com"#;
+
+    let reachable: bool = is_reachable(ZEKLABS);
+
+    if reachable {
+        println!("{}", format!("{} is reachable", ZEKLABS));
+
+        // Serialize the data to a JSON string
+        let json_data = serde_json::to_string(&update).expect("Failed to serialize to JSON");
+
+        // Check if config file exists, if not create it
+        let file_path = path::Path::new("config.json");
+        println!("Creating Config File");
+        if file_path.exists() {
+            println!("Config file exists");
+        } else {
+            // Create the file using `fs::File::create()`
+            match fs::File::create(&file_path) {
+                Ok(_) => println!("Config file created successfully"),
+                Err(e) => println!("Error creating file: {}", e),
+            }
+            fs::write(file_path, json_data.as_bytes()).expect("Unable to write file");
         }
-        fs::write(file_path, json_data.as_bytes()).expect("Unable to write file");
+
+        if firstrun() {
+            println!("This is the first run.");
+            println!("Downloading SQL Full Update");
+            download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar", "./");
+
+            println!("Extracting SQL Full Update");
+            extract("eq2emudb.rar");
+            delete_file("eq2emudb.rar");
+
+            // Check type of OS
+            match std::env::consts::OS {
+                "linux" => linux(),
+                "windows" => windows(),
+                _ => println!("Running on an unknown operating system"),
+            }
+        } else {
+            println!("This is not the first run.");
+        }
+    } else {
+        println!(
+            "{}",
+            format!("{} is not reachable. Cannot continue.", ZEKLABS)
+        );
     }
-
-    println!("Downloading SQL Full Update");
-    //download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar");
-    download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar", "./");
-
-    extract("eq2emudb.rar");
-
-    // Check type of OS
-    match std::env::consts::OS {
-        "linux" => linux(),
-        "windows" => windows(),
-        _ => println!("Running on an unknown operating system"),
-    }
+    // Ask the user for input before exiting
+    println!("Press Enter to exit...");
+    let mut buffer = String::new();
+    io::stdin()
+        .read_line(&mut buffer)
+        .expect("Failed to read line");
 }
 
 fn is_reachable(domain_name: &str) -> bool {
@@ -98,73 +124,57 @@ fn is_reachable(domain_name: &str) -> bool {
 fn linux() {
     println!("Linux Detected");
 
-    // Check for internet access
-    const ZEKLABS: &str = r#"Zeklabs.com"#;
-    let reachable: bool = is_reachable(ZEKLABS);
-
-    if reachable {
-        println!("{}", format!("{} is reachable", ZEKLABS).green());
-    } else {
-        println!("{}", format!("{} is not reachable", ZEKLABS).red());
-    }
+    /*
+       TODO: Check if the user has unrar installed, if not install it
+    */
 }
 
 fn windows() {
     println!("Windows Detected");
 
-    // Check for internet access
-    const ZEKLABS: &str = r#"Zeklabs.com"#;
-    let reachable: bool = is_reachable(ZEKLABS);
+    // Detect if OS is 32bit or 64 bit
+    println!("Detecting if OS is 32bit or 64 bit");
 
-    if reachable {
-        println!("{} is reachable", ZEKLABS);
-
-        // Detect if OS is 32bit or 64 bit
-        println!("Detecting if OS is 32bit or 64 bit");
-
-        let target_pointer_width = if cfg!(target_pointer_width = "32") {
-            println!("32 bit OS detected");
-            "32"
-        } else {
-            println!("64 bit OS detected");
-            "64"
-        }
-        .to_string();
-
-        //Get current working directory
-        let cwd = std::env::current_dir().expect("Failed to get current working directory");
-        println!("{}", cwd.to_string_lossy());
-
-        let full_filename = format!("vc_redist.x{}.exe", target_pointer_width,);
-
-        println!("{}", full_filename);
-        let url_prefix = "https://aka.ms/vs/17/release/";
-        let redist_url = format!("{}{}", url_prefix, full_filename);
-        println!("redist_url");
-        println!("{}", redist_url);
-
-        println!("Downloading Microsoft Visual C++ Redistributable");
-
-        //download(&redist_url, &full_filename);
-        download(&redist_url, &full_filename, "./redist/");
-
-        install_redist(&PathBuf::from(&full_filename));
-
-        // Ask the user for input before exiting
-        println!("Press Enter to exit...");
-        let mut buffer = String::new();
-        io::stdin()
-            .read_line(&mut buffer)
-            .expect("Failed to read line");
+    let target_pointer_width = if cfg!(target_pointer_width = "32") {
+        println!("32 bit OS detected");
+        "32"
     } else {
-        println!(
-            "{} is not reachable. Cannot continue without internet access.",
-            ZEKLABS
-        );
+        println!("64 bit OS detected");
+        "64"
     }
+    .to_string();
+
+    //Get current working directory
+    let cwd = std::env::current_dir().expect("Failed to get current working directory");
+    println!("{}", cwd.to_string_lossy());
+
+    let full_filename = format!("vc_redist.x{}.exe", target_pointer_width,);
+
+    println!("{}", full_filename);
+    let url_prefix = "https://aka.ms/vs/17/release/";
+    let redist_url = format!("{}{}", url_prefix, full_filename);
+    println!("redist_url");
+    println!("{}", redist_url);
+
+    println!("This is the first run. Windows");
+
+    println!("Downloading Microsoft Visual C++ Redistributable");
+
+    let redist_local = format!("./redist/{}", full_filename);
+    println!("redist local is: {}", redist_local);
+    download(&redist_url, &full_filename, "./redist/");
+
+    println!("installing {}, please wait", redist_local);
+    // Ask the user for input before exiting
+    println!("Press Enter to exit...");
+    let mut buffer = String::new();
+    io::stdin()
+        .read_line(&mut buffer)
+        .expect("Failed to read line");
+
+    install_redist(&PathBuf::from(&redist_local));
 }
 fn install_redist(exe_path: &PathBuf) {
-    println!("installing {}, please wait", exe_path.to_string_lossy());
     let status = Command::new(exe_path)
         //.arg("/q")
         //.arg("/norestart")
@@ -175,6 +185,25 @@ fn install_redist(exe_path: &PathBuf) {
         println!("Executable ran successfully");
     } else {
         eprintln!("Executable failed with exit code: {:?}", status.code());
+    }
+}
+
+fn download(url: &str, filename: &str, download_location: &str) {
+    if !Path::new(download_location).exists() {
+        match fs::create_dir_all(download_location) {
+            Ok(()) => println!("Directory created successfully."),
+            Err(e) => {
+                eprintln!("Error creating directory: {}", e);
+                return;
+            }
+        }
+    }
+    let full_filename = PathBuf::from(download_location).join(filename);
+    let download = Download::new(url, Some(&full_filename.to_str().unwrap()), None);
+
+    match download.download() {
+        Ok(_) => println!("Download Complete"),
+        Err(e) => println!("Download error: {}", e.to_string()),
     }
 }
 
@@ -196,36 +225,41 @@ fn extract(filename: &str) {
     }
 }
 
-fn download(url: &str, filename: &str, download_location: &str) {
-    // Create the download location directory if it doesn't exist
-    if !Path::new(download_location).exists() {
-        match fs::create_dir_all(download_location) {
-            Ok(()) => println!("Directory created successfully."),
-            Err(e) => {
-                eprintln!("Error creating directory: {}", e);
-                return;
-            }
-        }
-    }
+fn firstrun() -> bool {
+    // Read the JSON data from the file
+    let json_data = fs::read_to_string("config.json").expect("Failed to read file");
 
-    // Construct the full path for the downloaded file
-    let full_filename = PathBuf::from(download_location).join(filename);
+    // Parse the JSON data
+    let mut data: Value = serde_json::from_str(&json_data).expect("Failed to parse JSON");
 
-    let download = Download::new(url, Some(&full_filename.to_str().unwrap()), None);
-
-    match download.download() {
-        Ok(_) => println!("Download Complete"),
-        Err(e) => println!("Download error: {}", e.to_string()),
+    // Extract the value of "firstrun" field
+    let firstrun = data["firstrun"].as_u64().unwrap_or(0);
+    // Check the value of "firstrun" and perform actions accordingly
+    if firstrun == 1 {
+        println!("First run");
+        // Update "firstrun" field to 2
+        data["firstrun"] = json!(2);
+        // Write the updated JSON data back to the file
+        fs::write("config.json", serde_json::to_string_pretty(&data).unwrap())
+            .expect("Failed to write file");
+        true
+    } else if firstrun == 2 {
+        println!("Performing action for firstrun == 2");
+        // Do something else
+        false
+    } else {
+        println!("Unknown value for firstrun");
+        false
     }
 }
 
-/* fn download(url: &str, filename: &str) {
-    /* let url = &redist_url;
-    let filename = &full_filename; */
-    let download = Download::new(url, Some(filename), None);
-
-    match download.download() {
-        Ok(_) => println!("Download Complete"),
-        Err(e) => println!("Download error: {}", e.to_string()),
+fn delete_file(filename: &str) {
+    if Path::new(filename).exists() {
+        match fs::remove_file(filename) {
+            Ok(_) => println!("{} deleted successfully", filename),
+            Err(e) => println!("Error deleting file: {}", e),
+        }
+    } else {
+        println!("File does not exist");
     }
-} */
+}
