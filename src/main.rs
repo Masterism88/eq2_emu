@@ -3,9 +3,10 @@ use download_rs::async_download::Download;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
-use std::fs::File;
+//use std::fs::File;
 use std::io;
-use std::io::Write;
+//use std::io::Write;
+use std::error::Error;
 use std::net::TcpStream;
 use std::path::Path;
 use std::path::{self, PathBuf};
@@ -83,12 +84,101 @@ fn main() {
 
         if firstrun() {
             println!("This is the first run.");
+
+            // Download and extract the SQL Full Update
             println!("Downloading SQL Full Update");
-            download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar", "./");
+            download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar", "./").unwrap();
 
             println!("Extracting SQL Full Update");
             extract("eq2emudb.rar");
             delete_file("eq2emudb.rar");
+
+            // Download the  server EXE files
+            println!("Downloading server EXE files");
+            download(
+                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2Login__Debug64.exe",
+                "EQ2Login__Debug64.exe",
+                "./server/",
+            )
+            .unwrap();
+            download(
+                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2World__Debug_x64.exe",
+                "EQ2World__Debug_x64.exe",
+                "./server/",
+            ).unwrap();
+
+            //Download the server structure files
+            println!("Downloading server structure files");
+            download(
+                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/SpawnStructs.xml",
+                "SpawnStructs.xml",
+                "./server/",
+            )
+            .unwrap();
+            download(
+                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/WorldStructs.xml",
+                "WorldStructs.xml",
+                "./server/",
+            )
+            .unwrap();
+            download(
+                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2_Structs.xml",
+                "EQ2_Structs.xml",
+                "./server/",
+            )
+            .unwrap();
+            download(
+                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/ItemStructs.xml",
+                "ItemStructs.xml",
+                "./server/",
+            )
+            .unwrap();
+            download(
+                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/LoginStructs.xml",
+                "LoginStructs.xml",
+                "./server/",
+            )
+            .unwrap();
+            download(
+                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/CommonStructs.xml",
+                "CommonStructs.xml",
+                "./server/",
+            )
+            .unwrap();
+
+            // Download the server lua files
+            println!("Downloading server lua files");
+            download(
+                "https://zeklabs.com/dl/eq2emulua.rar",
+                "eq2emulua.rar",
+                "./server/",
+            )
+            .unwrap();
+            println!("Extracting server lua files");
+            extract("./server/eq2emulua.rar");
+            delete_file("./server/eq2emulua.rar");
+
+            // Download the server map files
+            println!("Downloading server map files");
+
+            for i in 1..=16 {
+                let part_number = format!("{:02}", i); // Format part number with leading zero if necessary
+                let url = format!(
+                    "https://github.com/devn00b/EQ2EMu-Maps/raw/master/eq2emumaps.part{}.rar",
+                    part_number
+                );
+                let filename = format!("eq2emumaps.part{}.rar", part_number);
+                let download_location = "./server/";
+
+                download(&url, &filename, &download_location).unwrap();
+            }
+            // Extract the server map files
+            println!("Extracting server map files");
+            for i in 1..=16 {
+                let part_number = format!("{:02}", i); // Format part number with leading zero if necessary
+                let filename = format!("./server/eq2emumaps.part{}.rar", part_number);
+                extract_maps(&filename);
+            }
 
             // Check type of OS
             match std::env::consts::OS {
@@ -144,9 +234,9 @@ fn windows() {
     }
     .to_string();
 
-    //Get current working directory
+    /*  //Get current working directory
     let cwd = std::env::current_dir().expect("Failed to get current working directory");
-    println!("{}", cwd.to_string_lossy());
+    println!("{}", cwd.to_string_lossy()); */
 
     let full_filename = format!("vc_redist.x{}.exe", target_pointer_width,);
 
@@ -156,23 +246,23 @@ fn windows() {
     println!("redist_url");
     println!("{}", redist_url);
 
-    println!("This is the first run. Windows");
-
     println!("Downloading Microsoft Visual C++ Redistributable");
 
     let redist_local = format!("./redist/{}", full_filename);
     println!("redist local is: {}", redist_local);
-    download(&redist_url, &full_filename, "./redist/");
+    download(&redist_url, &full_filename, "./redist/").unwrap();
 
     println!("installing {}, please wait", redist_local);
+    install_redist(&PathBuf::from(&redist_local));
+
+    //
+
     // Ask the user for input before exiting
     println!("Press Enter to exit...");
     let mut buffer = String::new();
     io::stdin()
         .read_line(&mut buffer)
         .expect("Failed to read line");
-
-    install_redist(&PathBuf::from(&redist_local));
 }
 fn install_redist(exe_path: &PathBuf) {
     let status = Command::new(exe_path)
@@ -187,23 +277,29 @@ fn install_redist(exe_path: &PathBuf) {
         eprintln!("Executable failed with exit code: {:?}", status.code());
     }
 }
-
-fn download(url: &str, filename: &str, download_location: &str) {
+fn download(url: &str, filename: &str, download_location: &str) -> Result<(), Box<dyn Error>> {
     if !Path::new(download_location).exists() {
         match fs::create_dir_all(download_location) {
             Ok(()) => println!("Directory created successfully."),
             Err(e) => {
                 eprintln!("Error creating directory: {}", e);
-                return;
+                return Err(e.into());
             }
         }
     }
+
     let full_filename = PathBuf::from(download_location).join(filename);
     let download = Download::new(url, Some(&full_filename.to_str().unwrap()), None);
 
     match download.download() {
-        Ok(_) => println!("Download Complete"),
-        Err(e) => println!("Download error: {}", e.to_string()),
+        Ok(_) => {
+            println!("Download Complete");
+            Ok(())
+        }
+        Err(e) => {
+            println!("Download error: {}", e);
+            Err(e.into())
+        }
     }
 }
 
@@ -219,7 +315,24 @@ fn extract(filename: &str) {
     println!("extracting {}, please wait", filename);
 
     if status.success() {
-        println!("Executable ran successfully");
+        println!("Extracted successfully");
+    } else {
+        eprintln!("Executable failed with exit code: {:?}", status.code());
+    }
+}
+fn extract_maps(filename: &str) {
+    let status = Command::new("unrar")
+        .arg("x")
+        .arg("-o+")
+        .arg("-inul")
+        .arg(filename)
+        .status()
+        .expect("Failed to execute command");
+
+    println!("extracting {}, please wait", filename);
+
+    if status.success() {
+        println!("Extracted successfully");
     } else {
         eprintln!("Executable failed with exit code: {:?}", status.code());
     }
