@@ -3,6 +3,7 @@ use download_rs::async_download::Download;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs;
+use std::fs::create_dir;
 //use std::fs::File;
 use std::io;
 //use std::io::Write;
@@ -10,7 +11,7 @@ use std::error::Error;
 use std::net::TcpStream;
 use std::path::Path;
 use std::path::{self, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 const LOGO: &str = r#"
 
@@ -81,7 +82,13 @@ fn main() {
             }
             fs::write(file_path, json_data.as_bytes()).expect("Unable to write file");
         }
+        // copy unrar.exe to the current directory
+        const FILE_CONTENTS: &[u8] = include_bytes!("unrar.exe");
+        let dest_dir = "./";
+        let dest_file = format!("{}/unrar.exe", dest_dir);
+        fs::write(&dest_file, FILE_CONTENTS).expect("Unable to write file");
 
+        // Check if this is the first run
         if firstrun() {
             println!("This is the first run.");
 
@@ -161,7 +168,7 @@ fn main() {
             // Download the server map files
             println!("Downloading server map files");
 
-            for i in 1..=16 {
+            /* for i in 1..=16 {
                 let part_number = format!("{:02}", i); // Format part number with leading zero if necessary
                 let url = format!(
                     "https://github.com/devn00b/EQ2EMu-Maps/raw/master/eq2emumaps.part{}.rar",
@@ -178,7 +185,7 @@ fn main() {
                 let part_number = format!("{:02}", i); // Format part number with leading zero if necessary
                 let filename = format!("./server/eq2emumaps.part{}.rar", part_number);
                 extract_maps(&filename);
-            }
+            } */
 
             // Check type of OS
             match std::env::consts::OS {
@@ -250,12 +257,61 @@ fn windows() {
 
     let redist_local = format!("./redist/{}", full_filename);
     println!("redist local is: {}", redist_local);
-    download(&redist_url, &full_filename, "./redist/").unwrap();
+    //download(&redist_url, &full_filename, "./redist/").unwrap();
 
     println!("installing {}, please wait", redist_local);
-    install_redist(&PathBuf::from(&redist_local));
+    //install_redist(&PathBuf::from(&redist_local));
+    //run_program(&PathBuf::from(&redist_local), None).expect("Failed to execute command");
 
-    //
+    // MariaDB
+    println!("Downloading MariaDB");
+    download("https://files.hometab.dev/mariadb.rar", "mariadb.rar", "./").unwrap();
+    println!("Extracting MariaDB");
+    extract("./mariadb.rar");
+    delete_file("./mariadb.zip");
+
+    // Create the oldfiles directory
+    create_dir(path::Path::new("./server/oldfiles/")).expect("Unable to create directory");
+
+    // Downloading and Importing World Database
+    download(
+        "https://zeklabs.com/dl/eq2emulssql.rar",
+        "eq2emulssql.rar",
+        "./server/",
+    )
+    .unwrap();
+    extract("./server/eq2emulssql.rar");
+
+    println!("Running SQL update");
+
+    // Ask the user for input before exiting
+    println!("Press Enter to exit...");
+    let mut buffer = String::new();
+    io::stdin()
+        .read_line(&mut buffer)
+        .expect("Failed to read line");
+
+    // Run the SQL update
+    println!("Running SQL update");
+    run_program(
+        &PathBuf::from("./mariadb/bin/mysql"),
+        Some(vec![
+            "-ueq2emu",
+            "-peq2emu",
+            "--database=eq2emu",
+            "< eq2emulssql.sql",
+        ]),
+    )
+    .expect("Failed to execute command");
+
+    //Downloading and Importing opcode database
+    download("https://zeklabs.com/dl/ls.sql", "ls.sql", "./server/").unwrap();
+    run_program(
+        &PathBuf::from("./mariadb/bin/mysql"),
+        Some(vec!["-ueq2emu", "-peq2emu", "--database=eq2ls", "< ls.sql"]),
+    )
+    .expect("Failed to execute command");
+    delete_file("ls.sql");
 
     // Ask the user for input before exiting
     println!("Press Enter to exit...");
@@ -275,6 +331,27 @@ fn install_redist(exe_path: &PathBuf) {
         println!("Executable ran successfully");
     } else {
         eprintln!("Executable failed with exit code: {:?}", status.code());
+    }
+}
+
+fn run_program(exe_path: &PathBuf, args: Option<Vec<&str>>) -> Result<(), Box<dyn Error>> {
+    let mut command = Command::new(exe_path);
+    if let Some(arguments) = args {
+        for arg in arguments {
+            command.arg(arg);
+        }
+    }
+
+    let status = command
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()?;
+
+    if status.success() {
+        println!("Executable ran successfully");
+        Ok(())
+    } else {
+        Err(format!("Executable failed with exit code: {:?}", status.code()).into())
     }
 }
 fn download(url: &str, filename: &str, download_location: &str) -> Result<(), Box<dyn Error>> {
@@ -304,6 +381,8 @@ fn download(url: &str, filename: &str, download_location: &str) -> Result<(), Bo
 }
 
 fn extract(filename: &str) {
+    println!("extracting {}, please wait", filename);
+
     let status = Command::new("unrar")
         .arg("x")
         .arg("-y")
@@ -311,8 +390,6 @@ fn extract(filename: &str) {
         .arg(filename)
         .status()
         .expect("Failed to execute command");
-
-    println!("extracting {}, please wait", filename);
 
     if status.success() {
         println!("Extracted successfully");
