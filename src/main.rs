@@ -241,10 +241,6 @@ fn windows() {
     }
     .to_string();
 
-    /*  //Get current working directory
-    let cwd = std::env::current_dir().expect("Failed to get current working directory");
-    println!("{}", cwd.to_string_lossy()); */
-
     let full_filename = format!("vc_redist.x{}.exe", target_pointer_width,);
 
     println!("{}", full_filename);
@@ -263,13 +259,6 @@ fn windows() {
     //install_redist(&PathBuf::from(&redist_local));
     //run_program(&PathBuf::from(&redist_local), None).expect("Failed to execute command");
 
-    // MariaDB
-    println!("Downloading MariaDB");
-    download("https://files.hometab.dev/mariadb.rar", "mariadb.rar", "./").unwrap();
-    println!("Extracting MariaDB");
-    extract("./mariadb.rar");
-    delete_file("./mariadb.zip");
-
     // Create the oldfiles directory
     create_dir(path::Path::new("./server/oldfiles/")).expect("Unable to create directory");
 
@@ -282,7 +271,47 @@ fn windows() {
     .unwrap();
     extract("./server/eq2emulssql.rar");
 
-    println!("Running SQL update");
+    // MariaDB
+    println!("Downloading MariaDB");
+    download("https://files.hometab.dev/mariadb.rar", "mariadb.rar", "./").unwrap();
+    println!("Extracting MariaDB");
+    extract("./mariadb.rar");
+    delete_file("./mariadb.rar");
+    // Start the MariaDB server
+    println!("Starting MariaDB server");
+
+    // Ask the user for input before exiting
+    println!("Press Enter to exit...");
+    let mut buffer = String::new();
+    io::stdin()
+        .read_line(&mut buffer)
+        .expect("Failed to read line");
+
+    //Get current working directory
+    let cwd = std::env::current_dir().expect("Failed to get current working directory");
+    println!("{}", cwd.to_string_lossy());
+
+    let db_bat_path = cwd.join("mariadb").join("bin").join("db.bat");
+
+    println!("{}", db_bat_path.to_string_lossy());
+
+    Command::new("cmd")
+        .args(&[
+            "/C",
+            "start",
+            "cmd",
+            "/K",
+            &format!(
+                "cd {} && {}",
+                cwd.join(path::Path::new("mariadb"))
+                    .join(path::Path::new("bin"))
+                    .to_str()
+                    .expect("Invalid path"),
+                db_bat_path.to_str().expect("Invalid path")
+            ),
+        ])
+        .spawn()
+        .expect("Failed to execute command");
 
     // Ask the user for input before exiting
     println!("Press Enter to exit...");
@@ -320,7 +349,7 @@ fn windows() {
         .read_line(&mut buffer)
         .expect("Failed to read line");
 }
-fn install_redist(exe_path: &PathBuf) {
+/* fn install_redist(exe_path: &PathBuf) {
     let status = Command::new(exe_path)
         //.arg("/q")
         //.arg("/norestart")
@@ -332,7 +361,7 @@ fn install_redist(exe_path: &PathBuf) {
     } else {
         eprintln!("Executable failed with exit code: {:?}", status.code());
     }
-}
+} */
 
 fn run_program(exe_path: &PathBuf, args: Option<Vec<&str>>) -> Result<(), Box<dyn Error>> {
     let mut command = Command::new(exe_path);
@@ -354,6 +383,7 @@ fn run_program(exe_path: &PathBuf, args: Option<Vec<&str>>) -> Result<(), Box<dy
         Err(format!("Executable failed with exit code: {:?}", status.code()).into())
     }
 }
+
 fn download(url: &str, filename: &str, download_location: &str) -> Result<(), Box<dyn Error>> {
     if !Path::new(download_location).exists() {
         match fs::create_dir_all(download_location) {
