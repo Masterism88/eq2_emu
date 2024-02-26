@@ -5,13 +5,16 @@ use serde_json::{json, Value};
 use std::fs;
 use std::fs::create_dir;
 //use std::fs::File;
-use std::io;
 //use std::io::Write;
+use mysql::prelude::Queryable;
+use mysql::Pool;
 use std::error::Error;
+use std::io::{self, BufRead};
 use std::net::TcpStream;
 use std::path::Path;
 use std::path::{self, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 const LOGO: &str = r#"
 
@@ -97,7 +100,7 @@ fn main() {
             download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar", "./").unwrap();
 
             println!("Extracting SQL Full Update");
-            extract("eq2emudb.rar");
+            extract("eq2emudb.rar", "./");
             delete_file("eq2emudb.rar");
 
             // Download the  server EXE files
@@ -162,7 +165,7 @@ fn main() {
             )
             .unwrap();
             println!("Extracting server lua files");
-            extract("./server/eq2emulua.rar");
+            extract("./server/eq2emulua.rar", "./server/");
             delete_file("./server/eq2emulua.rar");
 
             // Download the server map files
@@ -259,23 +262,11 @@ fn windows() {
     //install_redist(&PathBuf::from(&redist_local));
     //run_program(&PathBuf::from(&redist_local), None).expect("Failed to execute command");
 
-    // Create the oldfiles directory
-    create_dir(path::Path::new("./server/oldfiles/")).expect("Unable to create directory");
-
-    // Downloading and Importing World Database
-    download(
-        "https://zeklabs.com/dl/eq2emulssql.rar",
-        "eq2emulssql.rar",
-        "./server/",
-    )
-    .unwrap();
-    extract("./server/eq2emulssql.rar");
-
     // MariaDB
     println!("Downloading MariaDB");
     download("https://files.hometab.dev/mariadb.rar", "mariadb.rar", "./").unwrap();
     println!("Extracting MariaDB");
-    extract("./mariadb.rar");
+    extract("./mariadb.rar", "./");
     delete_file("./mariadb.rar");
     // Start the MariaDB server
     println!("Starting MariaDB server");
@@ -314,36 +305,72 @@ fn windows() {
         .expect("Failed to execute command");
 
     // Ask the user for input before exiting
-    println!("Press Enter to exit...");
+    println!("Wait for MariaDB to start, then press Enter to continue...");
+
     let mut buffer = String::new();
-    io::stdin()
-        .read_line(&mut buffer)
-        .expect("Failed to read line");
+    let start_time = Instant::now();
+
+    loop {
+        // Check if 60 seconds have elapsed
+        if start_time.elapsed() >= Duration::from_secs(60) {
+            break;
+        }
+
+        // Try to read a line from stdin with a timeout
+        let stdin = io::stdin();
+        let mut stdin_lock = stdin.lock();
+        let read_result = stdin_lock.read_line(&mut buffer);
+
+        match read_result {
+            Ok(_) => {
+                // Input received, exit loop
+                break;
+            }
+            Err(_) => {
+                // Error reading input, continue waiting
+                continue;
+            }
+        }
+    }
+
+    // Create the oldfiles directory
+    create_dir(path::Path::new("./server/oldfiles/")).expect("Unable to create directory");
 
     // Run the SQL update
     println!("Running SQL update");
-    run_program(
-        &PathBuf::from("./mariadb/bin/mysql"),
-        Some(vec![
-            "-ueq2emu",
-            "-peq2emu",
-            "--database=eq2emu",
-            "< eq2emulssql.sql",
-        ]),
+
+    // Downloading and Importing World Database
+    download(
+        "https://zeklabs.com/dl/eq2emulssql.rar",
+        "eq2emulssql.rar",
+        "./server/",
     )
-    .expect("Failed to execute command");
+    .unwrap();
+    extract("./server/eq2emulssql.rar", "./server/");
+
+    // Connect to the MariaDB server and execute SQL statements
+    match execute_sql(
+        "mysql://eq2emu:eq2emu@localhost:3306/eq2emu", // Modify with your actual credentials
+        "./server/eq2emulssql.sql",                    // Modify with the path to your SQL file
+    ) {
+        Ok(_) => println!("eq2emulssql.sql injected successfully"),
+        Err(err) => eprintln!("Error: {}", err),
+    }
 
     //Downloading and Importing opcode database
     download("https://zeklabs.com/dl/ls.sql", "ls.sql", "./server/").unwrap();
-    run_program(
-        &PathBuf::from("./mariadb/bin/mysql"),
-        Some(vec!["-ueq2emu", "-peq2emu", "--database=eq2ls", "< ls.sql"]),
-    )
-    .expect("Failed to execute command");
+
+    match execute_sql(
+        "mysql://eq2emu:eq2emu@localhost:3306/eq2emu", // Modify with your actual credentials
+        "./server/ls.sql",                             // Modify with the path to your SQL file
+    ) {
+        Ok(_) => println!(" ls.sql injected successfully"),
+        Err(err) => eprintln!("Error: {}", err),
+    }
     delete_file("ls.sql");
 
     // Ask the user for input before exiting
-    println!("Press Enter to exit...");
+    println!("Press Enter to exit... Done");
     let mut buffer = String::new();
     io::stdin()
         .read_line(&mut buffer)
@@ -410,14 +437,16 @@ fn download(url: &str, filename: &str, download_location: &str) -> Result<(), Bo
     }
 }
 
-fn extract(filename: &str) {
-    println!("extracting {}, please wait", filename);
+fn extract(filename: &str, extraction_path: &str) {
+    println!("Extracting {}, please wait", filename);
 
     let status = Command::new("unrar")
         .arg("x")
+        .arg("-o+") // Specify extraction path
         .arg("-y")
         .arg("-inul")
         .arg(filename)
+        .arg(extraction_path) // Specify the extraction path here
         .status()
         .expect("Failed to execute command");
 
@@ -427,6 +456,7 @@ fn extract(filename: &str) {
         eprintln!("Executable failed with exit code: {:?}", status.code());
     }
 }
+
 fn extract_maps(filename: &str) {
     let status = Command::new("unrar")
         .arg("x")
@@ -482,4 +512,23 @@ fn delete_file(filename: &str) {
     } else {
         println!("File does not exist");
     }
+}
+
+fn execute_sql(url: &str, sql_file: &str) -> Result<(), Box<dyn Error>> {
+    // Connect to the MariaDB server
+    let pool = Pool::new(url)?;
+
+    // Read SQL file
+    let sql_content = std::fs::read_to_string(sql_file)?;
+
+    // Execute SQL statements
+    let mut conn = pool.get_conn()?;
+    for statement in sql_content.split(";") {
+        let statement = statement.trim();
+        if !statement.is_empty() {
+            conn.query_drop(statement)?;
+        }
+    }
+
+    Ok(())
 }
