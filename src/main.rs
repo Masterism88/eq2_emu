@@ -86,109 +86,29 @@ fn main() {
             fs::write(file_path, json_data.as_bytes()).expect("Unable to write file");
         }
         // copy unrar.exe to the current directory
-        const FILE_CONTENTS: &[u8] = include_bytes!("unrar.exe");
+        const FILE_UNRAR: &[u8] = include_bytes!("unrar.exe");
         let dest_dir = "./";
         let dest_file = format!("{}/unrar.exe", dest_dir);
-        fs::write(&dest_file, FILE_CONTENTS).expect("Unable to write file");
+        fs::write(&dest_file, FILE_UNRAR).expect("Unable to write file");
 
         // Check if this is the first run
         if firstrun() {
             println!("This is the first run.");
 
             // Download and extract the SQL Full Update
-            println!("Downloading SQL Full Update");
-            download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar", "./").unwrap();
-
-            println!("Extracting SQL Full Update");
-            extract("eq2emudb.rar", "./");
-            delete_file("eq2emudb.rar");
+            sql_full_update();
 
             // Download the  server EXE files
-            println!("Downloading server EXE files");
-            download(
-                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2Login__Debug64.exe",
-                "EQ2Login__Debug64.exe",
-                "./server/",
-            )
-            .unwrap();
-            download(
-                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2World__Debug_x64.exe",
-                "EQ2World__Debug_x64.exe",
-                "./server/",
-            ).unwrap();
+            download_server_exe();
 
             //Download the server structure files
-            println!("Downloading server structure files");
-            download(
-                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/SpawnStructs.xml",
-                "SpawnStructs.xml",
-                "./server/",
-            )
-            .unwrap();
-            download(
-                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/WorldStructs.xml",
-                "WorldStructs.xml",
-                "./server/",
-            )
-            .unwrap();
-            download(
-                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2_Structs.xml",
-                "EQ2_Structs.xml",
-                "./server/",
-            )
-            .unwrap();
-            download(
-                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/ItemStructs.xml",
-                "ItemStructs.xml",
-                "./server/",
-            )
-            .unwrap();
-            download(
-                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/LoginStructs.xml",
-                "LoginStructs.xml",
-                "./server/",
-            )
-            .unwrap();
-            download(
-                "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/CommonStructs.xml",
-                "CommonStructs.xml",
-                "./server/",
-            )
-            .unwrap();
+            download_server_structures();
 
             // Download the server lua files
-            println!("Downloading server lua files");
-            download(
-                "https://zeklabs.com/dl/eq2emulua.rar",
-                "eq2emulua.rar",
-                "./server/",
-            )
-            .unwrap();
-            println!("Extracting server lua files");
-            extract("./server/eq2emulua.rar", "./server/");
-            delete_file("./server/eq2emulua.rar");
+            download_server_lua();
 
             // Download the server map files
-            println!("Downloading server map files");
-
-            /* for i in 1..=16 {
-                let part_number = format!("{:02}", i); // Format part number with leading zero if necessary
-                let url = format!(
-                    "https://github.com/devn00b/EQ2EMu-Maps/raw/master/eq2emumaps.part{}.rar",
-                    part_number
-                );
-                let filename = format!("eq2emumaps.part{}.rar", part_number);
-                let download_location = "./server/";
-
-                download(&url, &filename, &download_location).unwrap();
-            }
-            // Extract the server map files
-            println!("Extracting server map files");
-            for i in 1..=16 {
-                let part_number = format!("{:02}", i); // Format part number with leading zero if necessary
-                let filename = format!("./server/eq2emumaps.part{}.rar", part_number);
-                extract_maps(&filename);
-            } */
+            //download_server_maps();
 
             // Check type of OS
             match std::env::consts::OS {
@@ -263,8 +183,11 @@ fn windows() {
     //run_program(&PathBuf::from(&redist_local), None).expect("Failed to execute command");
 
     // MariaDB
-    println!("Downloading MariaDB");
-    download("https://files.hometab.dev/mariadb.rar", "mariadb.rar", "./").unwrap();
+    // copy unrar.exe to the current directory
+    const FILE_MARIADB: &[u8] = include_bytes!("mariadb.rar");
+    let dest_dir = "./";
+    let dest_file = format!("{}/mariadb.rar", dest_dir);
+    fs::write(&dest_file, FILE_MARIADB).expect("Unable to write file");
     println!("Extracting MariaDB");
     extract("./mariadb.rar", "./");
     delete_file("./mariadb.rar");
@@ -389,6 +312,111 @@ fn windows() {
         eprintln!("Executable failed with exit code: {:?}", status.code());
     }
 } */
+
+/*
+   Main Functions
+*/
+
+fn sql_full_update() {
+    println!("Downloading SQL Full Update");
+    download("https://zeklabs.com/dl/eq2emudb.rar", "eq2emudb.rar", "./").unwrap();
+
+    println!("Extracting SQL Full Update");
+    extract("eq2emudb.rar", "./");
+    delete_file("eq2emudb.rar");
+}
+
+fn download_server_exe() {
+    println!("Downloading server EXE files");
+    download(
+        "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2Login__Debug64.exe",
+        "EQ2Login__Debug64.exe",
+        "./server/",
+    )
+    .unwrap();
+    download(
+        "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2World__Debug_x64.exe",
+        "EQ2World__Debug_x64.exe",
+        "./server/",
+    )
+    .unwrap();
+}
+
+fn download_server_structures() {
+    println!("Downloading server structure files");
+    download(
+        "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/SpawnStructs.xml",
+        "SpawnStructs.xml",
+        "./server/",
+    )
+    .unwrap();
+    download(
+        "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/WorldStructs.xml",
+        "WorldStructs.xml",
+        "./server/",
+    )
+    .unwrap();
+    download(
+        "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/EQ2_Structs.xml",
+        "EQ2_Structs.xml",
+        "./server/",
+    )
+    .unwrap();
+    download(
+        "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/ItemStructs.xml",
+        "ItemStructs.xml",
+        "./server/",
+    )
+    .unwrap();
+    download(
+        "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/LoginStructs.xml",
+        "LoginStructs.xml",
+        "./server/",
+    )
+    .unwrap();
+    download(
+        "http://git.eq2emu.com:3000/devn00b/EQ2EMu/raw/master/server/CommonStructs.xml",
+        "CommonStructs.xml",
+        "./server/",
+    )
+    .unwrap();
+}
+
+fn download_server_lua() {
+    println!("Downloading server lua files");
+    download(
+        "https://zeklabs.com/dl/eq2emulua.rar",
+        "eq2emulua.rar",
+        "./server/",
+    )
+    .unwrap();
+    println!("Extracting server lua files");
+    extract("./server/eq2emulua.rar", "./server/");
+    delete_file("./server/eq2emulua.rar");
+}
+
+fn download_server_maps() {
+    println!("Downloading server map files");
+
+    for i in 1..=16 {
+        let part_number = format!("{:02}", i); // Format part number with leading zero if necessary
+        let url = format!(
+            "https://github.com/devn00b/EQ2EMu-Maps/raw/master/eq2emumaps.part{}.rar",
+            part_number
+        );
+        let filename = format!("eq2emumaps.part{}.rar", part_number);
+        let download_location = "./server/";
+
+        download(&url, &filename, &download_location).unwrap();
+    }
+    // Extract the server map files
+    println!("Extracting server map files");
+    for i in 1..=16 {
+        let part_number = format!("{:02}", i); // Format part number with leading zero if necessary
+        let filename = format!("./server/eq2emumaps.part{}.rar", part_number);
+        extract_maps(&filename);
+    }
+}
 
 fn run_program(exe_path: &PathBuf, args: Option<Vec<&str>>) -> Result<(), Box<dyn Error>> {
     let mut command = Command::new(exe_path);
