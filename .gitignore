@@ -18,3 +18,4 @@ Cargo.lock
 
 /target
 /bat-files
+src/mariadb.rar
